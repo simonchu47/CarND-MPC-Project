@@ -6,7 +6,7 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 9;
+size_t N = 6;
 double dt = 0.1;
 
 // This value assumes the model presented in the classroom is used.
@@ -23,7 +23,7 @@ const double Lf = 2.67;
 
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set to 40 mph.
-double ref_v = 30;
+double ref_v = 90;
 
 const double mph2mps = 0.44704;
 
@@ -115,24 +115,6 @@ class FG_eval {
       AD<double> a0 = vars[a_start + t - 1];
 
       AD<double> f0 = coeffs[0] + coeffs[1]*x1 + coeffs[2]*CppAD::pow(x1, 2) + coeffs[3]*CppAD::pow(x1, 3);
-      /*
-      AD<double> wp_last_x = x0;
-      AD<double> wp_last_y = coeffs[0] + coeffs[1]*wp_last_x + coeffs[2]*CppAD::pow(wp_last_x, 2) + coeffs[3]*CppAD::pow(wp_last_x, 3);
-      AD<double> wp_next_x = x0 + v0 * mph2mps * CppAD::cos(psi0) * dt;
-      AD<double> wp_next_y = coeffs[0] + coeffs[1]*wp_next_x + coeffs[2]*CppAD::pow(wp_next_x, 2) + coeffs[3]*CppAD::pow(wp_next_x, 3);
-
-      std::cout << "wp_next_y=" << wp_next_y << ", wp_last_y="<< wp_last_y << std::endl;
-      std::cout << "wp_next_x=" << wp_next_x << ", wp_last_x="<< wp_last_x << std::endl;
-
-      AD<double> psi_wp = CppAD::atan2(wp_next_y - wp_last_y, wp_next_x - wp_last_x);
-      std::cout << "psi_wp is " << psi_wp << std::endl;
-      AD<double> phi_car = CppAD::atan2(wp_next_y - y0, wp_next_x - x0);
-      std::cout << "phi_car is " << phi_car << std::endl;
-      AD<double> dst_wp_car = CppAD::sqrt(CppAD::pow(wp_next_x - x0, 2) + CppAD::pow(wp_next_y - y0, 2));
-      std::cout << "dst_wp_car is " << dst_wp_car << std::endl;
-      AD<double> cte = dst_wp_car*CppAD::sin(psi_wp - phi_car);
-      std::cout << "cte is " << cte <<std::endl;
-      */
       AD<double> psides0 = CppAD::atan(coeffs[1] + 2*coeffs[2]*x0 + 3*coeffs[3]*CppAD::pow(x0, 2));
 
       // Here's `x` to get you started.

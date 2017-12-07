@@ -8,6 +8,8 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "MPC.h"
 #include "json.hpp"
+#include <time.h>
+#include <list>
 
 // for convenience
 using json = nlohmann::json;
@@ -26,6 +28,8 @@ using json = nlohmann::json;
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
+
+std::list<double> time_used; 
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -103,7 +107,7 @@ int main() {
           double v = j[1]["speed"];
           double steering = j[1]["steering_angle"];
           double acceleration = j[1]["throttle"];
-          std::cout << "steering is " << steering << ", and acceleration is " << acceleration << std::endl;
+         
           /*
           * TODO: Calculate steering angle and throttle using MPC.
           *
@@ -111,17 +115,8 @@ int main() {
           *
           */
 
-          // Calculate the car position after 0.1s delay
-          /*          
-          double px_delay = px + v*MPH_TO_MPS*cos(psi)*TIME_DELAY;
-          double py_delay = py + v*MPH_TO_MPS*sin(psi)*TIME_DELAY;
-          double psi_delay = psi + v*MPH_TO_MPS*steering/LF_OF_CAR*TIME_DELAY;
-          double v_delay = v + acceleration*TIME_DELAY;
-          */
-          //Eigen::VectorXd way_x = Eigen::VectorXd::Map(ptsx.data(), ptsx.size());
-          //Eigen::VectorXd way_y = Eigen::VectorXd::Map(ptsy.data(), ptsy.size());
-
-          // Coordinate transforming based on the position and heading after delay time
+          // Coordinate transforming based on the current position and heading
+          // The way points are shown according to car perspective coordinate
           vector<double> next_x_vals;
           vector<double> next_y_vals;
           for (size_t i = 0; i < ptsx.size(); i++) {
@@ -137,30 +132,22 @@ int main() {
           Eigen::VectorXd way_x = Eigen::VectorXd::Map(next_x_vals.data(), next_x_vals.size());
           Eigen::VectorXd way_y = Eigen::VectorXd::Map(next_y_vals.data(), next_y_vals.size());
           
+          // Calculate the state after time delay, reference to the car perspective coordinate
           double px_delay = v*MPH_TO_MPS*TIME_DELAY;
           double py_delay = 0;
           double psi_delay = v*MPH_TO_MPS*(-steering)/LF_OF_CAR*TIME_DELAY;
           double v_delay = v + acceleration*TIME_DELAY;
 
-          // The polynimial is fitted to the way points
+          // The 3 order polynomial is fitted to the way points
           auto coeffs = polyfit(way_x, way_y, 3);
           
-          //double cte = polyeval(coeffs, 0) - 0;
-          /*
-          double wp_last_x = ptsx[0];
-          double wp_last_y = ptsy[0];
-          double wp_next_x = ptsx[1];
-          double wp_next_y = ptsy[1];
-          double psi_wp = atan2(wp_next_y - wp_last_y, wp_next_x - wp_last_x);
-          double phi_car = atan2(wp_next_y - py, wp_next_x - px);
-          double dst_wp_car = sqrt(pow(wp_next_x - px, 2) + pow(wp_next_y - py, 2));
-          double cte = dst_wp_car*sin(phi_car - psi_wp);
-          */
-          //double slope = 3*coeffs[3]*pow(px_delay, 2) +
-          //               2*coeffs[2]*px_delay +
-          //               coeffs[1];
+          // Calculate the slope at the origin(0, 0)  
+          // with the fitting polynomial
+          // y(x) = coeffs[3]*x^3 + coeffs[2]*x^2 + coeffs[1]*x + coeffs[0]
+          // y'(x) = 3*coeffs[3]*x^2 + 2*coeffs[2]*x + coeffs[1]
           double slope = coeffs[1];
 
+          // Calculate the cte and epsi after time delay
           //double epsi = psi - atan(slope);
           double epsi = 0 - atan(slope);
           double cte = polyeval(coeffs, 0) - 0;
@@ -168,19 +155,39 @@ int main() {
           double cte_delay = cte + v*MPH_TO_MPS*sin(epsi)*TIME_DELAY;
 
           Eigen::VectorXd state(6);
-          //state << px, py, psi, v, cte, epsi;
-          //state << 0, 0, 0, v_delay, cte, epsi;
-          //state << px_delay, py_delay, 0, v, cte, epsi;
           state << px_delay, py_delay, psi_delay, v_delay, cte_delay, epsi_delay;
 
+          // The following are to calculate the average time consumed by solver
+          clock_t start, end;
+          start = clock();
+          
+          // Here is solver
           auto vars = mpc.Solve(state, coeffs);
 
-          std::cout << "cte = " << cte << ", slope = " << slope << std::endl;
-          std::cout << "vars[0] = " << vars[0] << std::endl;
+          end = clock();
+          double cpu_time_used = ((double)(end - start))/CLOCKS_PER_SEC;
+         
+          // Moving average the time used
+          double average_time_used;
+          time_used.push_back(cpu_time_used);
+          int time_size = time_used.size();
+          if (time_size > 20) {          
+            time_used.pop_front();
+          }
+
+          if (time_size > 0) {
+            double sum = 0.0;
+            for (std::list<double>::iterator it = time_used.begin();
+                 it != time_used.end(); ++it) {
+              sum += *it;
+            }
+            average_time_used = sum / time_used.size();
+          }
+          
+          std::cout << "Solver used " << average_time_used <<"s ............." << std::endl;
+
           double steer_value = -vars[0]/deg2rad(25);
           double throttle_value = vars[1];
-          //double throttle_value = 0.01;
-          //double steer_value = -0.99;
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -188,25 +195,15 @@ int main() {
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
-          //Display the MPC predicted trajectory 
+          // Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
-
+          
+          // The outputs of solver are reference to the car perpective coordinate
           size_t predict_size = (vars.size() - 2)/2;
           size_t predict_x_start = 2;
           size_t predict_y_start = predict_x_start + predict_size;
           for (size_t i = predict_x_start; i < predict_y_start; i++) {
-            //mpc_x_vals.push_back(vars[i] - px);
-            /*
-            double delta_x = vars[i] - px;
-            double delta_y = vars[i + predict_size] - py;
-            double dist = sqrt(delta_x*delta_x + delta_y*delta_y);
-            double theta = atan2(delta_y, delta_x);
-            double mpc_x = dist*cos(theta - psi);
-            double mpc_y = dist*sin(theta - psi);
-            mpc_x_vals.push_back(mpc_x);
-            mpc_y_vals.push_back(mpc_y);
-            */
             mpc_x_vals.push_back(vars[i]);
             mpc_y_vals.push_back(vars[i + predict_size]);
           }
@@ -218,21 +215,6 @@ int main() {
           msgJson["mpc_y"] = mpc_y_vals;
 
           //Display the waypoints/reference line
-          //vector<double> next_x_vals;
-          //vector<double> next_y_vals;
-          /*
-          for (size_t i = 0; i < ptsx.size(); i++) {
-            double delta_x = ptsx[i] - px;
-            double delta_y = polyeval(coeffs, ptsx[i]) - py;
-            //double delta_y = ptsy[i] - py;
-            double dist = sqrt(delta_x*delta_x + delta_y*delta_y);
-            double theta = atan2(delta_y, delta_x);
-            double next_x = dist*cos(theta - psi);
-            double next_y = dist*sin(theta - psi);
-            next_x_vals.push_back(next_x);
-            next_y_vals.push_back(next_y);
-          }*/
-
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
 
