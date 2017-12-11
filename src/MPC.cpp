@@ -23,7 +23,7 @@ const double Lf = 2.67;
 
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set to 40 mph.
-double ref_v = 90;
+double ref_v = 80;
 
 const double mph2mps = 0.44704;
 
