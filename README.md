@@ -13,6 +13,10 @@ This project is the fifth project of Udacity Self-driving Car Nanodegree Term2. 
 [video1]: ./results/MPC_80mph.mp4 "MPC controller"
 
 ---
+
+### How to build the program
+There is a guide [here](https://github.com/simonchu47/CarND-MPC-Project/blob/master/HOWTO.md) showing how to prepare the environment and build the program.
+
 ### Describe the model in detail
 
 #### 1. the states
