@@ -1,108 +1,93 @@
-# CarND-Controls-MPC
-Self-Driving Car Engineer Nanodegree Program
-
+# **Model Predictive Control** 
 ---
 
-## Dependencies
+This project is the fifth project of Udacity Self-driving Car Nanodegree Term2. The goals / steps of this project are the following:
 
-* cmake >= 3.5
- * All OSes: [click here for installation instructions](https://cmake.org/install/)
-* make >= 4.1(mac, linux), 3.81(Windows)
-  * Linux: make is installed by default on most Linux distros
-  * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
-  * Windows: [Click here for installation instructions](http://gnuwin32.sourceforge.net/packages/make.htm)
-* gcc/g++ >= 5.4
-  * Linux: gcc / g++ is installed by default on most Linux distros
-  * Mac: same deal as make - [install Xcode command line tools]((https://developer.apple.com/xcode/features/)
-  * Windows: recommend using [MinGW](http://www.mingw.org/)
-* [uWebSockets](https://github.com/uWebSockets/uWebSockets)
-  * Run either `install-mac.sh` or `install-ubuntu.sh`.
-  * If you install from source, checkout to commit `e94b6e1`, i.e.
-    ```
-    git clone https://github.com/uWebSockets/uWebSockets
-    cd uWebSockets
-    git checkout e94b6e1
-    ```
-    Some function signatures have changed in v0.14.x. See [this PR](https://github.com/udacity/CarND-MPC-Project/pull/3) for more details.
-
-* **Ipopt and CppAD:** Please refer to [this document](https://github.com/udacity/CarND-MPC-Project/blob/master/install_Ipopt_CppAD.md) for installation instructions.
-* [Eigen](http://eigen.tuxfamily.org/index.php?title=Main_Page). This is already part of the repo so you shouldn't have to worry about it.
-* Simulator. You can download these from the [releases tab](https://github.com/udacity/self-driving-car-sim/releases).
-* Not a dependency but read the [DATA.md](./DATA.md) for a description of the data sent back from the simulator.
+* Use a model predictive controller to control the handling and throttle of the car on the simulator
+* Test that the model successfully drives around track one without leaving the road
+* Summarize the results with a written report
 
 
-## Basic Build Instructions
+[//]: # (Image References)
 
-1. Clone this repo.
-2. Make a build directory: `mkdir build && cd build`
-3. Compile: `cmake .. && make`
-4. Run it: `./mpc`.
+[video1]: ./results/MPC_80mph.mp4 "MPC controller"
 
-## Tips
+---
+### Describe the model in detail
 
-1. It's recommended to test the MPC on basic examples to see if your implementation behaves as desired. One possible example
-is the vehicle starting offset of a straight line (reference). If the MPC implementation is correct, after some number of timesteps
-(not too many) it should find and track the reference line.
-2. The `lake_track_waypoints.csv` file has the waypoints of the lake track. You could use this to fit polynomials and points and see of how well your model tracks curve. NOTE: This file might be not completely in sync with the simulator so your solution should NOT depend on it.
-3. For visualization this C++ [matplotlib wrapper](https://github.com/lava/matplotlib-cpp) could be helpful.)
-4.  Tips for setting up your environment are available [here](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/0949fca6-b379-42af-a919-ee50aa304e6a/lessons/f758c44c-5e40-4e01-93b5-1a82aa4e044f/concepts/23d376c7-0195-4276-bdf0-e02f1f3c665d)
-5. **VM Latency:** Some students have reported differences in behavior using VM's ostensibly a result of latency.  Please let us know if issues arise as a result of a VM environment.
+#### 1. the states
+The states include the x position(x), the y position(y), the orientation(psi), the velocity(v), the cross track error(cte) and the orientation error(epsi).
+Those elements are all reference to car perspective coordinate.
 
-## Editor Settings
+#### 2. the actuators
+The actuators include the steering angle(delta) and the throttle(or the brake), namely the acceleration(a).
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
+#### 3. the update equations
+The update equations are as the following. Notice that "dt" is the duration and "LF" is the distance between the front of the vehicle and its center of gravity.
 
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
+```
+x1 = x0 + v0 * cos(psi0) * dt
 
-## Code Style
+y1 = y0 + v0 * sin(psi0) * dt
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
+psi1 = psi0 + v0 * delta0 / Lf * dt
 
-## Project Instructions and Rubric
+v1 = v0 + a0 * dt;
 
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
+cte1 = cte0 + v0 * sin(epsi0) * dt
 
-More information is only accessible by people who are already enrolled in Term 2
-of CarND. If you are enrolled, see [the project page](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/f1820894-8322-4bb3-81aa-b26b3c6dcbaf/lessons/b1ff3be0-c904-438e-aad3-2b5379f0e0c3/concepts/1a2255a0-e23c-44cf-8d41-39b8a3c8264a)
-for instructions and the project rubric.
+epsi1 = epsi0 + v0 * delta0 / Lf * dt
+```
 
-## Hints!
+### How the N (timestep length) and dt (elapsed duration between timesteps) values were chosen
+The N and dt combination decides how fast the car can drive around the track safely. If speed of 30 mph is desired, there could many options we could choose. But my target is the speed limit, 100 mph. 
+#### 1. N (timestep length)
+This parameter decides how much time would be consumed by the solver. On my computer, if N is set as 6, the consumed time is about 0.08 seconds. If N is set as 20, the consumed time would be about 0.025 seconds. But if N is set as 30, the consumed time would skyrocket to 0.1 seconds, which will let the car very unstable and uncontrollable. But N less than 6 can not control the car. For speed of 30 mph and dt of value 0.1, N of value from 6 to 20 all have good performance. But for speed of 90 mph, I have the only one option, which is N set as 6 and dt set as 0.1 seconds. Unfortunately I can not find a combination for 100 mph.
 
-* You don't have to follow this directory structure, but if you do, your work
-  will span all of the .cpp files here. Keep an eye out for TODOs.
+#### 2. dt (elapsed duration between timesteps)
+Too large dt will cause the predicted car positions to deviate from the desired trajectory. But too small dt will cause the car to response to the environment change too slowly. For speed of 30mph, dt of value larger than 0.3 seconds would generate deviation obviously. Conversely, dt of value less than 0.05 seconds would let the car ride on the curbs easily. But for speed of 90 mph, similar to the choosing of N, I also have very narrow span of the dt I could choose, that is about 0.08 to 0.12 seconds. 
 
-## Call for IDE Profiles Pull Requests
 
-Help your fellow students!
+### Polynomial Fitting and MPC Preprocessing
+Before starting the execution of the solver each time when the new states and way points are received, the following steps will be done.
 
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to we ensure
-that students don't feel pressured to use one IDE or another.
+First, transform the way points to those reference to the current car perspective coordinate.
 
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
+Second, use a 3 order polynomial to fit the way points.
 
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
+Third, reference to the current car perspective coordinate, calculate the state of the car and then pass the state and the 3 order polynomial to the solver.
 
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
+### Model Predictive Control with Latency
+As mentioned third step above, according to the current state and the delay time, the state would be updated and then passed to the solver. Again, the state is reference to the current car perspective coordinate.
 
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
+```
+px_delay = v * TIME_DELAY
 
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
+py_delay = 0;
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+psi_delay = v * delta / LF * TIME_DELAY
+
+v_delay = v + a * TIME_DELAY;
+
+epsi_delay = epsi + v * delta / LF * TIME_DELAY
+
+cte_delay = cte + v * sin(epsi) * TIME_DELAY
+```
+
+About cte and epsi, considering the fitting polynomial
+
+```
+y(x) = coeffs[3]*x^3 + coeffs[2]*x^2 + coeffs[1]*x + coeffs[0]
+
+epsi = 0 - atan(coeffs[1])
+
+cte = y(0) - 0
+```
+
+The final result is driving a lap around the track at the speed controlled at 80 mph, as the video.
+[video1]
+
+
+
+
+
